@@ -432,6 +432,7 @@ let clickTimer = null;
 let activePointers = new Map(); // pointerId → {x, y} para pinch-to-zoom
 let pinchDist = null;           // distancia entre 2 dedos en el frame anterior
 let longPressTimer = null;      // timer para colapsar/expandir con long-press
+let lastTap = { time: 0, x: 0, y: 0 };
 
 function setTool(t) {
   tool = t;
@@ -942,13 +943,26 @@ wrapper.addEventListener('pointerdown', e => {
 
   // On canvas background → maybe pan or deselect
   const onBackground =
-    e.target === document.getElementById('canvas') ||
-    e.target === document.getElementById('nodes-layer') ||
-    e.target === document.getElementById('arrows-layer') ||
-    e.target.closest('#edges-group');
+    !e.target.closest('.node') &&
+    !e.target.closest('#context-menu') &&
+    !e.target.closest('#modal-overlay') &&
+    !e.target.closest('#toolbar') &&
+    !e.target.closest('#tab-bar');
 
   if (onBackground) {
-    if (tool === 'pan' || spaceDown || e.pointerType === 'touch') {
+    if (e.pointerType === 'touch') {
+      const now = Date.now();
+      const dist = Math.hypot(e.clientX - lastTap.x, e.clientY - lastTap.y);
+      if (now - lastTap.time < 300 && dist < 40) {
+        lastTap = { time: 0, x: 0, y: 0 };
+        const pos = screenToCanvas(e.clientX, e.clientY);
+        createNode(snap(pos.x - NODE_W / 2), snap(pos.y - NODE_H / 2));
+        return;
+      }
+      lastTap = { time: now, x: e.clientX, y: e.clientY };
+      panning = { startX: e.clientX, startY: e.clientY, origVX: vp.x, origVY: vp.y };
+      wrapper.style.cursor = 'grabbing';
+    } else if (tool === 'pan' || spaceDown) {
       panning = { startX: e.clientX, startY: e.clientY, origVX: vp.x, origVY: vp.y };
       wrapper.style.cursor = 'grabbing';
     }
@@ -958,9 +972,11 @@ wrapper.addEventListener('pointerdown', e => {
 
 wrapper.addEventListener('dblclick', e => {
   const onBackground =
-    e.target === document.getElementById('canvas') ||
-    e.target === document.getElementById('nodes-layer') ||
-    e.target === document.getElementById('arrows-layer');
+    !e.target.closest('.node') &&
+    !e.target.closest('#context-menu') &&
+    !e.target.closest('#modal-overlay') &&
+    !e.target.closest('#toolbar') &&
+    !e.target.closest('#tab-bar');
   if (!onBackground) return;
   const pos = screenToCanvas(e.clientX, e.clientY);
   createNode(snap(pos.x - NODE_W / 2), snap(pos.y - NODE_H / 2));
